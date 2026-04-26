@@ -1,0 +1,11 @@
+flux_1_dev__vs__real: 82.13
+sd_1_5__vs__real: 96.45
+sd_3_5_large__vs__real: 83.12
+sdxl_turbo__vs__real: 90.45
+z_image_turbo__vs__real: 77.79
+flux_fill_real_rescaled__vs__real: 84.06
+flux_fill_flux_1_dev__vs__real: 86.26
+flux_fill_sd_3_5_large__vs__real: 81.66
+flux_fill_real_rescaled__vs__real_rescaled: 57.33
+flux_fill_flux_1_dev__vs__flux_1_dev: 57.39
+flux_fill_sd_3_5_large__vs__sd_3_5_large: 50.35

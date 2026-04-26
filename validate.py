@@ -6,7 +6,7 @@ import torch
 import torchvision.transforms as transforms
 import torch.utils.data
 import numpy as np
-from sklearn.metrics import average_precision_score, precision_recall_curve, accuracy_score
+from sklearn.metrics import average_precision_score, precision_recall_curve, accuracy_score, precision_score, recall_score, roc_auc_score, matthews_corrcoef
 from torch.utils.data import Dataset
 import sys
 from models import get_model
@@ -112,20 +112,28 @@ def validate(model, loader, find_thres=False):
     # exit()
     # =================================================================== #
     
-    # Get AP 
+    # Get AP and AUC
     ap = average_precision_score(y_true, y_pred)
+    auc = roc_auc_score(y_true, y_pred)
 
     # Acc based on 0.5
     r_acc0, f_acc0, acc0 = calculate_acc(y_true, y_pred, 0.5)
+    prec0 = precision_score(y_true, y_pred > 0.5, zero_division=0)
+    rec0 = recall_score(y_true, y_pred > 0.5, zero_division=0)
+    mcc0 = matthews_corrcoef(y_true, y_pred > 0.5)
+
     if not find_thres:
-        return ap, r_acc0, f_acc0, acc0
+        return ap, auc, r_acc0, f_acc0, acc0, prec0, rec0, mcc0
 
 
     # Acc based on the best thres
     best_thres = find_best_threshold(y_true, y_pred)
     r_acc1, f_acc1, acc1 = calculate_acc(y_true, y_pred, best_thres)
+    prec1 = precision_score(y_true, y_pred > best_thres, zero_division=0)
+    rec1 = recall_score(y_true, y_pred > best_thres, zero_division=0)
+    mcc1 = matthews_corrcoef(y_true, y_pred > best_thres)
 
-    return ap, r_acc0, f_acc0, acc0, r_acc1, f_acc1, acc1, best_thres
+    return ap, auc, r_acc0, f_acc0, acc0, prec0, rec0, mcc0, r_acc1, f_acc1, acc1, prec1, rec1, mcc1, best_thres
 
     
     
@@ -285,9 +293,16 @@ if __name__ == '__main__':
     if (opt.real_path == None) or (opt.fake_path == None) or (opt.data_mode == None):
         dataset_paths = DATASET_PATHS
     else:
-        dataset_paths = [ dict(real_path=opt.real_path, fake_path=opt.fake_path, data_mode=opt.data_mode) ]
+        dataset_paths = [ dict(real_path=opt.real_path, fake_path=opt.fake_path, data_mode=opt.data_mode, key='custom') ]
 
 
+
+    csv_path = os.path.join(opt.result_folder, 'results.csv')
+    fieldnames = [
+        'domain', 'ap', 'auc', 
+        'acc_0.5', 'r_acc_0.5', 'f_acc_0.5', 'prec_0.5', 'rec_0.5', 'mcc_0.5',
+        'acc_best', 'r_acc_best', 'f_acc_best', 'prec_best', 'rec_best', 'mcc_best', 'best_threshold'
+    ]
 
     for dataset_path in (dataset_paths):
         set_seed()
@@ -302,11 +317,23 @@ if __name__ == '__main__':
                                     )
 
         loader = torch.utils.data.DataLoader(dataset, batch_size=opt.batch_size, shuffle=False, num_workers=4)
-        ap, r_acc0, f_acc0, acc0, r_acc1, f_acc1, acc1, best_thres = validate(model, loader, find_thres=True)
+        res = validate(model, loader, find_thres=True)
+        
+        # res = ap, auc, r_acc0, f_acc0, acc0, prec0, rec0, mcc0, r_acc1, f_acc1, acc1, prec1, rec1, mcc1, best_thres
+        
+        file_exists = os.path.isfile(csv_path)
+        with open(csv_path, 'a', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            if not file_exists:
+                writer.writeheader()
+            writer.writerow({
+                'domain': dataset_path['key'],
+                'ap': res[0]*100, 
+                'auc': res[1]*100,
+                'acc_0.5': res[4]*100, 'r_acc_0.5': res[2]*100, 'f_acc_0.5': res[3]*100, 'prec_0.5': res[5], 'rec_0.5': res[6], 'mcc_0.5': res[7],
+                'acc_best': res[10]*100, 'r_acc_best': res[8]*100, 'f_acc_best': res[9]*100, 'prec_best': res[11], 'rec_best': res[12], 'mcc_best': res[13], 
+                'best_threshold': res[14]
+            })
 
-        with open( os.path.join(opt.result_folder,'ap.txt'), 'a') as f:
-            f.write(dataset_path['key']+': ' + str(round(ap*100, 2))+'\n' )
-
-        with open( os.path.join(opt.result_folder,'acc0.txt'), 'a') as f:
-            f.write(dataset_path['key']+': ' + str(round(r_acc0*100, 2))+'  '+str(round(f_acc0*100, 2))+'  '+str(round(acc0*100, 2))+'\n' )
+        print(f"Domain: {dataset_path['key']}, AP: {res[0]*100:.2f}, AUC: {res[1]*100:.2f}, Acc: {res[4]*100:.2f}")
 
