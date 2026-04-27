@@ -73,14 +73,51 @@ def evaluate_on_UFD(model, test_loader, device):
     return metrics, details
 
 
+import argparse
+
 def main():
+    parser = argparse.ArgumentParser(description="Evaluate UFD on FakeFlickr datasets (zero-shot)")
+    parser.add_argument("--filter", type=str, help="Substring filter for experiment names")
+    parser.add_argument("--list", action="store_true", help="List all available experiments and exit")
+    parser.add_argument("--include", type=str, help="Comma-separated list of experiment names to include")
+    args = parser.parse_args()
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     # Initialize Universal Fake Detect Model
     arch = "CLIP:ViT-L/14"
     ckpt_path = "/home/marek/projects/fake_flickr_sota/UniversalFakeDetect/pretrained_weights/fc_weights.pth"
-    print(f"Loading {arch} from {ckpt_path}")
     
+    # Configure our pipeline identically to the reference script
+    config = PipelineConfig(architecture="clip")
+    
+    print("Preparing test datasets from resnet50_wandb_pipeline (only checking test splits)...")
+    experiments = prepare_experiments(config)
+
+    all_exp_names = list(experiments.keys())
+
+    if args.list:
+        print("\nAvailable experiments:")
+        for i, name in enumerate(all_exp_names):
+            print(f"{i+1}. {name}")
+        return
+
+    # Filtering logic
+    selected_exp_names = all_exp_names
+    if args.include:
+        include_list = [s.strip() for s in args.include.split(",")]
+        selected_exp_names = [name for name in selected_exp_names if name in include_list]
+    
+    if args.filter:
+        selected_exp_names = [name for name in selected_exp_names if args.filter in name]
+
+    if not selected_exp_names:
+        print(f"No experiments matched the criteria.")
+        return
+
+    print(f"Selected {len(selected_exp_names)} experiments for evaluation.")
+
+    print(f"Loading {arch} from {ckpt_path}")
     ufd_model = get_model(arch)
     state_dict = torch.load(ckpt_path, map_location="cpu")
     # According to validate.py, we load the fc state dict:
@@ -89,12 +126,6 @@ def main():
     # Ensure gradients are off for all parameters
     for param in ufd_model.parameters():
         param.requires_grad = False
-    
-    # Configure our pipeline identically to the reference script
-    config = PipelineConfig(architecture="clip")
-    
-    print("Preparing test datasets from resnet50_wandb_pipeline (only checking test splits)...")
-    experiments = prepare_experiments(config)
 
     # Setup results directories
     results_base_dir = Path("/home/marek/projects/fake_flickr_sota/UniversalFakeDetect/results")
@@ -104,7 +135,8 @@ def main():
     summary_file = results_base_dir / "summary.csv"
     summary_results = []
 
-    for exp_name, exp in experiments.items():
+    for exp_name in selected_exp_names:
+        exp = experiments[exp_name]
         test_dataset = exp.datasets["test"]
         print(f"\n--- Evaluating UFD on {exp_name} test dataset ({len(test_dataset)} samples) ---")
         
@@ -143,10 +175,22 @@ def main():
         )
         
     # Save summary results
-    with open(summary_file, "w", newline="") as f:
-        if summary_results:
+    if summary_results:
+        file_exists = summary_file.exists()
+        # If we are NOT filtering and file exists, we'd normally overwrite (handled by previous logic or expected)
+        # But here, if we are filtering, we definitely want to append.
+        # Let's clean up if NOT filtering:
+        if not args.filter and not args.include and file_exists:
+            mode = "w"
+            write_header = True
+        else:
+            mode = "a"
+            write_header = not file_exists
+
+        with open(summary_file, mode, newline="") as f:
             writer = csv.DictWriter(f, fieldnames=summary_results[0].keys())
-            writer.writeheader()
+            if write_header:
+                writer.writeheader()
             writer.writerows(summary_results)
     
     print(f"\nSummary saved to {summary_file}")

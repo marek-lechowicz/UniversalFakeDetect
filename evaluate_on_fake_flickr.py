@@ -16,7 +16,15 @@ from resnet50_wandb_pipeline.data import prepare_experiments
 # Ignore warnings for cleaner output
 warnings.filterwarnings("ignore")
 
+import argparse
+
 def main():
+    parser = argparse.ArgumentParser(description="Evaluate UFD on FakeFlickr datasets")
+    parser.add_argument("--filter", default="real_rescaled", type=str, help="Substring filter for experiment names")
+    parser.add_argument("--list", action="store_true", help="List all available experiments and exit")
+    parser.add_argument("--include", type=str, help="Comma-separated list of experiment names to include")
+    args = parser.parse_args()
+
     # Configuration
     python_exe = "./.venv/bin/python3"
     arch = "CLIP:ViT-L/14"
@@ -31,12 +39,42 @@ def main():
     config = PipelineConfig(architecture="clip")
     print("Preparing test datasets from fake_flickr pipeline...")
     experiments = prepare_experiments(config)
+
+    all_exp_names = list(experiments.keys())
     
+    if args.list:
+        print("\nAvailable experiments:")
+        for i, name in enumerate(all_exp_names):
+            print(f"{i+1}. {name}")
+        return
+
+    # Filtering logic
+    selected_exp_names = all_exp_names
+    if args.include:
+        include_list = [s.strip() for s in args.include.split(",")]
+        selected_exp_names = [name for name in selected_exp_names if name in include_list]
+    
+    if args.filter:
+        selected_exp_names = [name for name in selected_exp_names if args.filter in name]
+
+    if not selected_exp_names:
+        print(f"No experiments matched the criteria.")
+        return
+
+    print(f"Selected {len(selected_exp_names)} experiments for evaluation.")
+
     # Global CSV result file
     global_csv_file = os.path.join(result_folder, 'final_results.csv')
-    if os.path.exists(global_csv_file): os.remove(global_csv_file)
+    
+    # If we are running ALL experiments, it's safe to clear the file.
+    # If we are running a subset, we probably want to append or keep existing.
+    # However, to avoid duplicates if re-running, it's tricky.
+    # For now, let's only remove if we are running everything and no filter is applied.
+    if not args.filter and not args.include and os.path.exists(global_csv_file):
+        os.remove(global_csv_file)
 
-    for exp_name, exp in experiments.items():
+    for exp_name in selected_exp_names:
+        exp = experiments[exp_name]
         print(f"\n" + "="*50)
         print(f"Evaluating: {exp_name}")
         print("="*50)
