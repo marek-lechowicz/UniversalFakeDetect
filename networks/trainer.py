@@ -13,7 +13,16 @@ class Trainer(BaseModel):
         super(Trainer, self).__init__(opt)
         self.opt = opt  
         self.model = get_model(opt.arch)
-        torch.nn.init.normal_(self.model.fc.weight.data, 0.0, opt.init_gain)
+        
+        if hasattr(opt, 'ckpt') and opt.ckpt and __import__('os').path.exists(opt.ckpt):
+            state_dict = torch.load(opt.ckpt, map_location='cpu')
+            if 'model' in state_dict:
+                self.model.load_state_dict(state_dict['model'])
+            else:
+                self.model.fc.load_state_dict(state_dict)
+            print("Loaded pre-trained weights from", opt.ckpt)
+        else:
+            torch.nn.init.normal_(self.model.fc.weight.data, 0.0, opt.init_gain)
 
         if opt.fix_backbone:
             params = []

@@ -1,0 +1,2 @@
+domain,ap,auc,acc_0.5,r_acc_0.5,f_acc_0.5,prec_0.5,rec_0.5,mcc_0.5,acc_best,r_acc_best,f_acc_best,prec_best,rec_best,mcc_best,best_threshold
+custom,66.56030884859422,66.6104,58.699999999999996,88.7,28.7,0.7175,0.287,0.2175,62.4,62.0,62.8,0.623015873015873,0.628,0.2480079363809483,0.07966701686382294

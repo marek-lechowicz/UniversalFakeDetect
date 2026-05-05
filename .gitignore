@@ -208,3 +208,5 @@ __marimo__/
 
 
 models/clip/__pycache__/
+checkpoints
+wandb

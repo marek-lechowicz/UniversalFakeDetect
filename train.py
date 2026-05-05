@@ -1,6 +1,8 @@
 import os
 import time
 from tensorboardX import SummaryWriter
+import wandb
+from tqdm import tqdm
 
 from validate import validate
 from data import create_dataloader
@@ -40,13 +42,15 @@ if __name__ == '__main__':
 
     train_writer = SummaryWriter(os.path.join(opt.checkpoints_dir, opt.name, "train"))
     val_writer = SummaryWriter(os.path.join(opt.checkpoints_dir, opt.name, "val"))
+    
+    wandb.init(project="fake-flickr", entity="budalema", name=opt.name, tags=["UFD", opt.name], config=vars(opt))
         
     early_stopping = EarlyStopping(patience=opt.earlystop_epoch, delta=-0.001, verbose=True)
     start_time = time.time()
     print ("Length of data loader: %d" %(len(data_loader)))
     for epoch in range(opt.niter):
         
-        for i, data in enumerate(data_loader):
+        for i, data in enumerate(tqdm(data_loader, desc=f"Epoch {epoch}/{opt.niter}")):
             model.total_steps += 1
 
             model.set_input(data)
@@ -55,6 +59,7 @@ if __name__ == '__main__':
             if model.total_steps % opt.loss_freq == 0:
                 print("Train loss: {} at step: {}".format(model.loss, model.total_steps))
                 train_writer.add_scalar('loss', model.loss, model.total_steps)
+                wandb.log({"train/loss": model.loss}, step=model.total_steps)
                 print("Iter time: ", ((time.time()-start_time)/model.total_steps)  )
 
             if model.total_steps in [10,30,50,100,1000,5000,10000] and False: # save models at these iters 
@@ -70,6 +75,7 @@ if __name__ == '__main__':
         ap, r_acc, f_acc, acc = validate(model.model, val_loader)
         val_writer.add_scalar('accuracy', acc, model.total_steps)
         val_writer.add_scalar('ap', ap, model.total_steps)
+        wandb.log({"val/accuracy": acc, "val/ap": ap, "epoch": epoch}, step=model.total_steps)
         print("(Val @ epoch {}) acc: {}; ap: {}".format(epoch, acc, ap))
 
         early_stopping(acc, model)
@@ -82,4 +88,6 @@ if __name__ == '__main__':
                 print("Early stopping.")
                 break
         model.train()
+
+    wandb.finish()
 

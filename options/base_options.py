@@ -10,8 +10,9 @@ class BaseOptions():
 
     def initialize(self, parser):
         parser.add_argument('--mode', default='binary')
-        parser.add_argument('--arch', type=str, default='res50', help='see my_models/__init__.py')
+        parser.add_argument('--arch', type=str, default='CLIP:ViT-L/14', help='see my_models/__init__.py')
         parser.add_argument('--fix_backbone', action='store_true')  
+        parser.add_argument('--ckpt', type=str, default='', help='Path to pre-trained weights to fine-tune')
 
         # data augmentation
         parser.add_argument('--rz_interp', default='bilinear')
